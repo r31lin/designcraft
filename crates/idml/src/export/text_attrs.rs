@@ -84,6 +84,9 @@ impl<'a> Ex<'a> {
             el.set("Ligatures", bool_s(v));
         }
         self.char_decoration_attrs(el, a);
+        for (k, v) in a.plugin_attrs.iter().flatten() {
+            el.set(k, v);
+        }
         if let Some(list) = &a.otf_features {
             for (tag, _, attr) in designcraft_doc::otf::TOGGLES {
                 el.set(attr, bool_s(designcraft_doc::otf::is_on(list, tag)));

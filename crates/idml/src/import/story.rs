@@ -108,6 +108,7 @@ impl<'r> Importer<'r> {
         let mut over = pchars.clone();
         over.merge(&self.char_attrs(c));
         over.change = over.change.or(outer.over.change);
+        over.plugin_attrs = plugin_attrs(c);
         CharFormat { style, over }
     }
 
@@ -142,9 +143,11 @@ impl<'r> Importer<'r> {
                         for t in &c.children {
                             match t {
                                 Node::Text(s) | Node::CData(s) => {
+                                    // A plugin's marker is its U+FEFF: it stays with its attributes.
+                                    let marker = cf.over.plugin_attrs.is_some();
                                     let s: String = s
                                         .chars()
-                                        .filter(|c| *c != '\u{FEFF}')
+                                        .filter(|c| marker || *c != '\u{FEFF}')
                                         .map(|c| if c == '\n' || c == '\r' || c == '\u{2029}' { st::FORCED_LINE_BREAK } else { c })
                                         .collect();
                                     b.push(&s, cf);
@@ -424,6 +427,16 @@ struct XrefSource {
     format: String,
     text: String,
     page: Option<String>,
+}
+
+/// The character-range attributes of third-party plugins kept for round trip
+/// ([`CharAttrs::plugin_attrs`]): EasyCatalog marks each field with an empty-looking U+FEFF range
+/// whose `ECTagData` names the field's data source, record and field.
+const PLUGIN_CHAR_ATTRS: &[&str] = &["ECTagData"];
+
+fn plugin_attrs(c: &El) -> Option<Vec<(String, String)>> {
+    let attrs: Vec<_> = c.attrs.iter().filter(|(k, v)| PLUGIN_CHAR_ATTRS.contains(&k.as_str()) && !v.is_empty()).cloned().collect();
+    (!attrs.is_empty()).then_some(attrs)
 }
 
 /// Whether a `TextVariableInstance` shows a cross-reference page number: its

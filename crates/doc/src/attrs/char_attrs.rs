@@ -173,5 +173,9 @@ attr_set! {
         change: ChangeMark = ChangeMark::None,
         /// XML: the element this text is tagged with (Tags panel, inline).
         xml_tag: String = String::new(),
+        /// Attributes a third-party plugin set on the text's character range in IDML (EasyCatalog's
+        /// `ECTagData` field markers), as (name, value), written back unchanged on IDML export.
+        /// They belong to the characters they were read with: inserted text never takes them.
+        plugin_attrs: Vec<(String, String)> = Vec::new(),
     }
 }

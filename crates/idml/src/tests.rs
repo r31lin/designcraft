@@ -543,6 +543,47 @@ fn story_optical_margin_round_trips() {
     assert!(styles.contains(r#"IgnoreEdgeAlignment="true""#), "{styles}");
 }
 
+/// EasyCatalog marks each field with a U+FEFF range on either side whose `ECTagData` names the
+/// field; the attribute stays on its marker through import, editing and export, and text typed
+/// next to a marker doesn't take it.
+#[test]
+fn plugin_character_attributes_round_trip() {
+    let csr = |attr: &str, text: &str| {
+        format!(
+            r#"<CharacterStyleRange AppliedCharacterStyle="CharacterStyle/$ID/[No character style]"{attr}><Content>{text}</Content></CharacterStyleRange>"#
+        )
+    };
+    let tag = |kind: u8| format!(r#" ECTagData="$ID/{kind} Preise 4711 Kbetr""#);
+    let body = [csr("", "Preis "), csr(&tag(2), "\u{feff}"), csr("", "54"), csr(&tag(3), "\u{feff}"), csr("", " €")].concat();
+    let story_xml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<idPkg:Story xmlns:idPkg="http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging" DOMVersion="16.0">
+  <Story Self="s1"><ParagraphStyleRange AppliedParagraphStyle="ParagraphStyle/Body">{body}</ParagraphStyleRange></Story>
+</idPkg:Story>"#
+    );
+    let story = |d: &Document| d.stories.values().find(|s| s.text.starts_with("Preis")).cloned().unwrap();
+    let marks = |s: &designcraft_doc::Story| {
+        s.runs().filter_map(|(r, f)| f.over.plugin_attrs.as_ref().map(|a| (s.text[r].to_string(), a[0].1.clone()))).collect::<Vec<_>>()
+    };
+    let want = vec![("\u{feff}".to_string(), "$ID/2 Preise 4711 Kbetr".to_string()), ("\u{feff}".to_string(), "$ID/3 Preise 4711 Kbetr".to_string())];
+    let mut d = import_idml_with(&fixture_with_story(&story_xml), &|_| None).unwrap();
+    assert_eq!(marks(&story(&d)), want);
+    // A new price between the markers, and text typed after the end marker.
+    let sid = story(&d).id;
+    let st = d.story_mut(sid).unwrap();
+    let at = st.text.find("54").unwrap();
+    st.replace(at..at + 2, "55");
+    let end = st.text.rfind('\u{feff}').unwrap() + '\u{feff}'.len_utf8();
+    st.insert(end, ",-");
+    assert_eq!(marks(&story(&d)), want);
+    let bytes = export_idml(&d);
+    let text = zip_text(&bytes, "Stories/");
+    assert_eq!(text.matches("ECTagData=").count(), 2, "{text}");
+    let back = story(&import_idml(&bytes).unwrap());
+    assert_eq!(back.text, "Preis \u{feff}55\u{feff},- €");
+    assert_eq!(marks(&back), want);
+}
+
 /// `[Basic Paragraph]` is InDesign's `$ID/NormalParagraphStyle`, both ways.
 #[test]
 fn basic_paragraph_is_normal_paragraph_style() {

@@ -405,10 +405,11 @@ impl Story {
     }
 
     /// [`Story::insert_with`] without the table fix-up.
-    pub(crate) fn insert_with_raw(&mut self, pos: usize, text: &str, fmt: CharFormat) {
+    pub(crate) fn insert_with_raw(&mut self, pos: usize, text: &str, mut fmt: CharFormat) {
         if text.is_empty() {
             return;
         }
+        fmt.over.plugin_attrs = None;
         let pos = floor_char_boundary(&self.text, pos);
         let refs = text.matches(crate::notes::FOOTNOTE_REF).count();
         if refs > 0 {
